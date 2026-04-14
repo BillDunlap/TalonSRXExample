@@ -4,6 +4,8 @@
 
 package frc.robot.subsystems;
 
+import org.littletonrobotics.junction.Logger;
+
 import edu.wpi.first.math.controller.SimpleMotorFeedforward;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -80,9 +82,10 @@ public class TriomniDrive extends SubsystemBase {
     // This method will be called once per scheduler run
     m_wheelPositions.update(m_frontMotor.getPosition(), m_leftMotor.getPosition(), m_rightMotor.getPosition());
     m_pose2d = m_odometry.update(m_gyro.getRotation2d(), m_wheelPositions);
+    Logger.recordOutput("Pose", m_pose2d);
     SmartDashboard.putNumber("Requested Voltage", m_speed_voltage);
-    SmartDashboard.putNumber("Pose/X", m_pose2d.getX());
-    SmartDashboard.putNumber("Pose/Y", m_pose2d.getY());
-    SmartDashboard.putNumber("Pose/Theta", m_pose2d.getRotation().getDegrees());
+    SmartDashboard.putNumber("Pose_/X", m_pose2d.getX());
+    SmartDashboard.putNumber("Pose_/Y", m_pose2d.getY());
+    SmartDashboard.putNumber("Pose_/Theta", m_pose2d.getRotation().getDegrees());
   }
 }

@@ -36,26 +36,23 @@ public class TriomniDriveKinematics implements Kinematics<TriomniDriveWheelSpeed
 
     public TriomniDriveKinematics(double robotRadius){
         m_robotRadius = robotRadius;
-        m_forwardKinematics = new SimpleMatrix(3, 3);
-        setForwardKinematics();
-        m_inverseKinematics = m_forwardKinematics.pseudoInverse();
+        m_inverseKinematics = new SimpleMatrix(3, 3);
+        computeInverseKinematics();
+        m_forwardKinematics = m_inverseKinematics.pseudoInverse();
         System.out.println("forward kinematics = " + m_forwardKinematics);
         System.out.println("inverse kinematics = " + m_inverseKinematics);
     }
 
-    private void setForwardKinematics(){
-        double thirtyDegrees = Math.PI/6.0;
-        double cos30 = Math.cos(thirtyDegrees); // sqrt(3)/2
-        double sin30 = Math.sin(thirtyDegrees); // 1/2
-        double reciprocalRadius = 1.0 / m_robotRadius;
-        m_forwardKinematics.setRow(0, 0, 0.0, -cos30, cos30);
-        m_forwardKinematics.setRow(1, 0, 1.0, -sin30, -sin30);
-        m_forwardKinematics.setRow(2, 0, reciprocalRadius, reciprocalRadius, reciprocalRadius);
+    private void computeInverseKinematics(){
+        double d120 = Math.PI * 2.0/3.0; // 120 degree angular spacing between omniwheels
+        m_inverseKinematics.setColumn(0, 0, -Math.sin(0.0*d120), -Math.sin(1.0*d120), -Math.sin(2.0*d120));
+        m_inverseKinematics.setColumn(1, 0, Math.cos(0.0*d120), Math.cos(1.0*d120), Math.cos(2.0*d120));
+        m_inverseKinematics.setColumn(2, 0, m_robotRadius, m_robotRadius, m_robotRadius);
     }
-    // We expect that computing the inverse of the forward kinematics will give the same as the following
-    // m_inverseKinematics.setRow(0, 0, 0.0, 2.0/3.0, m_robotRadius/3.0);
-    // m_inverseKinematics.setRow(1, 0, -Math.sqrt(3.0)/3, -1.0/3.0, m_robotRadius/3.0);
-    // m_inverseKinematics.setRow(2, 0, Math.sqrt(3.0)/3.0, -1.0/3.0, m_robotRadius/3.0);
+    // We expect that computing the inverse of the inverse kinematics will give the same as the following
+    // m_inverseKinematics.setRow(0, 0, 0.0, -sqrt(3.0)/3.0, +sqrt(3.0)/3.0);
+    // m_inverseKinematics.setRow(1, 0, 2.0/3.0, -1.0/3.0, -1.0/3.0);
+    // m_inverseKinematics.setRow(2, 0, 1.0/m_robotRadius, 1.0/m_robotRadius, 1.0/m_robotRadius);
 
     @Override
     public TriomniDriveWheelPositions copy(TriomniDriveWheelPositions positions){
