@@ -15,6 +15,7 @@ import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.GyroWrapper;
 import frc.robot.kinematics.TriomniDriveKinematics;
 import frc.robot.kinematics.TriomniDriveOdometry;
+import frc.robot.kinematics.TriomniDrivePoseEstimator;
 import frc.robot.kinematics.TriomniDriveWheelPositions;
 
 
@@ -29,7 +30,9 @@ public class TriomniDrive extends SubsystemBase {
   private final TriomniDriveKinematics m_driveKinematics;
   private final GyroWrapper m_gyro;
   private TriomniDriveOdometry m_odometry;
-  private Pose2d m_pose2d;
+  private Pose2d m_pose2d_from_odometry;
+  private TriomniDrivePoseEstimator m_poseEstimator;
+  private Pose2d m_pose2d_from_poseEstimator;
 
   private double m_speed_voltage = 0.0;
 
@@ -56,7 +59,7 @@ public class TriomniDrive extends SubsystemBase {
     m_wheelPositions = new TriomniDriveWheelPositions(0.0, 0.0, 0.0);
     SmartDashboard.putData("Wheel Pos", m_wheelPositions);
     m_odometry = new TriomniDriveOdometry(m_driveKinematics, m_gyro.getRotation2d(), m_wheelPositions);
-    // SmartDashboard.putData("Odometry", m_odometry);
+    m_poseEstimator = new TriomniDrivePoseEstimator(m_driveKinematics, m_gyro.getRotation2d(), m_wheelPositions, Pose2d.kZero);  // m_driveKinematics, m_gyro.getRotation2d(), m_wheelPositions);
   }
 
   /** Move in a straight line in a robot-relative direction
@@ -80,12 +83,13 @@ public class TriomniDrive extends SubsystemBase {
   @Override
   public void periodic() {
     // This method will be called once per scheduler run
-    m_wheelPositions.update(m_frontMotor.getPosition(), m_leftMotor.getPosition(), m_rightMotor.getPosition());
-    m_pose2d = m_odometry.update(m_gyro.getRotation2d(), m_wheelPositions);
-    Logger.recordOutput("Pose", m_pose2d);
     SmartDashboard.putNumber("Requested Voltage", m_speed_voltage);
-    SmartDashboard.putNumber("Pose_/X", m_pose2d.getX());
-    SmartDashboard.putNumber("Pose_/Y", m_pose2d.getY());
-    SmartDashboard.putNumber("Pose_/Theta", m_pose2d.getRotation().getDegrees());
+    
+    m_wheelPositions.update(m_frontMotor.getPosition(), m_leftMotor.getPosition(), m_rightMotor.getPosition());
+    m_pose2d_from_odometry = m_odometry.update(m_gyro.getRotation2d(), m_wheelPositions);
+    Logger.recordOutput("Pose(from Odometry)", m_pose2d_from_odometry);
+    
+    m_pose2d_from_poseEstimator = m_poseEstimator.update(m_gyro.getRotation2d(), m_wheelPositions);
+    Logger.recordOutput("Pose(from PoseEstimator)", m_pose2d_from_poseEstimator);
   }
 }
