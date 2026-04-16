@@ -9,7 +9,6 @@ import java.util.function.DoubleSupplier;
 import org.littletonrobotics.junction.Logger;
 
 import edu.wpi.first.math.MathUtil;
-import edu.wpi.first.math.controller.SimpleMotorFeedforward;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -18,7 +17,7 @@ import edu.wpi.first.wpilibj2.command.InstantCommand;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.GyroWrapper;
 import frc.robot.kinematics.TriomniDriveKinematics;
-import frc.robot.kinematics.TriomniDriveOdometry;
+// import frc.robot.kinematics.TriomniDriveOdometry;
 import frc.robot.kinematics.TriomniDrivePoseEstimator;
 import frc.robot.kinematics.TriomniDriveWheelPositions;
 import frc.robot.kinematics.TriomniDriveWheelSpeeds;
@@ -34,8 +33,8 @@ public class TriomniDrive extends SubsystemBase {
   private final TriomniDriveWheelPositions m_wheelPositions;
   private final TriomniDriveKinematics m_driveKinematics;
   private final GyroWrapper m_gyro;
-  private TriomniDriveOdometry m_odometry;
-  private Pose2d m_pose2d_from_odometry;
+  // private TriomniDriveOdometry m_odometry;
+  // private Pose2d m_pose2d_from_odometry;
   private TriomniDrivePoseEstimator m_poseEstimator;
   private Pose2d m_pose2d_from_poseEstimator;
   private ChassisSpeeds m_desiredChassisSpeeds;
@@ -43,13 +42,11 @@ public class TriomniDrive extends SubsystemBase {
   private double m_maxWheelSpeed = 2.5; // m/s.  This should take about 10 volts on basement carpet
 
   private double m_speed_voltage = 0.0;
-  private boolean m_invertMotorVoltage = true;
-  // feedforward constants
-  private final double m_kS = 2.9; // volts needed to overcome static friction on medium pile carpet
-  private final double m_kV = 0.01366; // voltage increase needed to increase speed by 1 encoder click per 100ms
-  private final double m_kA = 0.0; // not considering acceleration in feedforward calculation
-  SimpleMotorFeedforward m_feedforward = new SimpleMotorFeedforward(m_kS, m_kV, m_kA);
-   
+  // on my robot, running motor with positive voltage makes robot
+  // twist clockwise.  We want positive twist to be counterclockwise,
+  // so invert the voltage before giving it to motor.
+  private final boolean m_invertMotorVoltage = true;
+  
   /** Creates a new TriomniDrive. */
   public TriomniDrive(double wheelDiameter, double robotRadius) {
     m_wheelDiameter = wheelDiameter;
@@ -66,7 +63,7 @@ public class TriomniDrive extends SubsystemBase {
     m_driveKinematics = new TriomniDriveKinematics(m_robotRadius);
     m_wheelPositions = new TriomniDriveWheelPositions(0.0, 0.0, 0.0);
     SmartDashboard.putData("Wheel Pos", m_wheelPositions);
-    m_odometry = new TriomniDriveOdometry(m_driveKinematics, m_gyro.getRotation2d(), m_wheelPositions);
+    // m_odometry = new TriomniDriveOdometry(m_driveKinematics, m_gyro.getRotation2d(), m_wheelPositions);
     m_poseEstimator = new TriomniDrivePoseEstimator(m_driveKinematics, m_gyro.getRotation2d(), m_wheelPositions, Pose2d.kZero);  // m_driveKinematics, m_gyro.getRotation2d(), m_wheelPositions);
   }
 

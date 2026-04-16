@@ -18,8 +18,8 @@ import edu.wpi.first.wpilibj2.command.SubsystemBase;
  * This will try to start both of them and use the one that it can start.
  * If both are responsive, use the WhichGyro enum say which one to get the 
  * data from.
- * TODO: send to the SmartDashboard the data from all the gyros that it can start,
- * so you can see how they differ.
+ * 
+ * TODO: the Pigeon2 branch is never used, fix that.
  */
 public class GyroWrapper extends SubsystemBase {
 

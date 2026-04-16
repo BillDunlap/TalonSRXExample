@@ -27,9 +27,11 @@ public class TalonSRXWrapper extends SubsystemBase {
   // in my basement and recording voltage and speed at three voltages.
   // Approximate results were 80 clicks/100ms forward motion at 4 volts,
   // 225 at 6 and 300 at 7.
-  // The Talon SRX motor controller uses native units for position and velocity to ensure maximum sensor resolution.
-  // Position is measured in raw encoder edges (1440 per revolution for these us digital encoders),
-  // while velocity is measured in raw encoder units per 100 milliseconds
+  // The Talon SRX motor controller uses native encoder units for position and velocity "to ensure maximum sensor resolution".
+  // This triomnidrive robot has US Digital E4P-360-250 quadrature encoders.
+  //    360 cycles (== 1440 clicks) per revolution (the 250 refers to hole for quarter inch shaft).
+  // Position is measured in encoder edges (1440 per revolution),
+  // while velocity is measured in position units per 100 milliseconds
   private double m_kS = 0.0; // 2.9; // Volts to overcome static friction medium pile carpet, determined experimentally
   private double m_kV_nativeUnits = 0.01; // 0.01366; // Volts/(clicks/100ms), determined experimentally
   private double m_desiredSpeed_meters_per_second ;
