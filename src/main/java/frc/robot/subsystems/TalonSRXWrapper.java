@@ -9,7 +9,10 @@ import com.ctre.phoenix.motorcontrol.TalonSRXControlMode;
 import com.ctre.phoenix.motorcontrol.can.TalonSRX;
 import com.ctre.phoenix.motorcontrol.can.TalonSRXConfiguration;
 
+import edu.wpi.first.math.MathUtil;
+import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.controller.SimpleMotorFeedforward;
+import edu.wpi.first.math.filter.SlewRateLimiter;
 import edu.wpi.first.util.sendable.SendableBuilder;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.InstantCommand;
@@ -18,26 +21,35 @@ import edu.wpi.first.wpilibj2.command.SubsystemBase;
 public class TalonSRXWrapper extends SubsystemBase {
   private TalonSRX m_talonSRX;
   private double m_wheelDiameter_meters; // in meters
+  private boolean m_invertMotorVoltage;
   private double m_voltageCompensationSaturation = 10.0; // 100% == 10V, 80% = 8V (if battery has 10V or 8V, respectively, in it)
   // feedforward gains determined by running robot on medium pile carpet
   // in my basement and recording voltage and speed at three voltages.
   // Approximate results were 80 clicks/100ms forward motion at 4 volts,
   // 225 at 6 and 300 at 7.
-  private SimpleMotorFeedforward m_feedForward;
-  // TODO: change units of m_kV to volts/(meters/second)
   // The Talon SRX motor controller uses native units for position and velocity to ensure maximum sensor resolution.
-  // Position is measured in raw encoder edges (1440 per revolution for these us digits encoders),
+  // Position is measured in raw encoder edges (1440 per revolution for these us digital encoders),
   // while velocity is measured in raw encoder units per 100 milliseconds
-  private double m_kS = 2.9; // Volts, determined experimentally
-  private double m_kV_nativeUnits = 0.01366; // Volts/(clicks/100ms), determined experimentally
-  private double m_kV;  //  volts / (meters/second)
+  private double m_kS = 0.0; // 2.9; // Volts to overcome static friction medium pile carpet, determined experimentally
+  private double m_kV_nativeUnits = 0.01; // 0.01366; // Volts/(clicks/100ms), determined experimentally
+  private double m_desiredSpeed_meters_per_second ;
+  private double m_desiredSpeed_nativeUnits;
+  private final double m_clicks_per_revolution = 1440; 
+  private PIDController m_pidController = new PIDController(0.010, 0.0, 0.0);
+  private SimpleMotorFeedforward m_feedForward;
+  private double m_ffVolts;
+  private double m_pidVolts;
+  private SlewRateLimiter m_slewRateLimiter = new SlewRateLimiter(100.0); // don't change motor voltage by more than that many volts each second.
+
   /** Creates a new TalonSRXWrapper.
    * @param canID the CAN number for this Talon SRX motor controller
    * @param wheelDiameter
    */
-  public TalonSRXWrapper(int canID, double wheelDiameter_meters){
+  public TalonSRXWrapper(int canID, double wheelDiameter_meters, boolean invertMotorVoltage){
     m_talonSRX = new TalonSRX(canID);
     m_wheelDiameter_meters = wheelDiameter_meters;
+    m_invertMotorVoltage = invertMotorVoltage;
+
     TalonSRXConfiguration config = new TalonSRXConfiguration();
     config.peakCurrentLimit = 40; // the peak current, in amps
     config.peakCurrentDuration = 1500; // the time at the peak current before the limit triggers, in ms
@@ -49,7 +61,7 @@ public class TalonSRXWrapper extends SubsystemBase {
     m_talonSRX.configVoltageCompSaturation(m_voltageCompensationSaturation);
     m_talonSRX.enableVoltageCompensation(true);
     m_talonSRX.set(ControlMode.PercentOutput, 0.0);
-    m_feedForward = new SimpleMotorFeedforward(m_kS, m_kV);
+    m_feedForward = new SimpleMotorFeedforward(m_kS, m_kV_nativeUnits);
   }
 
   @Override
@@ -57,13 +69,16 @@ public class TalonSRXWrapper extends SubsystemBase {
     builder.addDoubleProperty("Position", this::getPosition, null);
     builder.addDoubleProperty("Position(raw)", this::getPosition_raw, null);
     builder.addDoubleProperty("Velocity", this::getVelocity, null);
+    builder.addDoubleProperty("Desired Velocity", ()->m_desiredSpeed_meters_per_second, null);
     builder.addDoubleProperty("Motor Voltage", this::getMotorVoltage, null);
     builder.addDoubleProperty("Bus Voltage", m_talonSRX::getBusVoltage, null);
+    builder.addDoubleProperty("ffVolts", ()->m_ffVolts, null);
+    builder.addDoubleProperty("pidVolts", ()->m_pidVolts, null);
   }
 
   private double nativePosition2Meters(double nat){
     return nat                                // clicks
-           / 1440.0                           // /(clicks/rotations) -> rotations
+           / m_clicks_per_revolution          // /(clicks/rotations) -> rotations
            * Math.PI * m_wheelDiameter_meters // *meters/rotation -> meters
           ;
   }
@@ -75,6 +90,20 @@ public class TalonSRXWrapper extends SubsystemBase {
     );  // -> meters/second
   }
 
+  private double metersToNativePosition(double meters){
+    return meters                                       // meters
+           * 1.0 / (Math.PI * m_wheelDiameter_meters)   // revolutions/meter
+           * m_clicks_per_revolution                    // clicks/revolution
+    ;                                                   // -> clicks
+  }
+
+  private double metersPerSecondToNativeVelocity(double metersPerSecond){
+    return metersToNativePosition(
+      metersPerSecond    // meters/second
+      * 0.1              // seconds/100ms
+    );                   //  -> clicks/100ms
+  }
+
   public double getPosition_raw(){
     return m_talonSRX.getSelectedSensorPosition();
   }
@@ -82,27 +111,51 @@ public class TalonSRXWrapper extends SubsystemBase {
     return nativePosition2Meters(getPosition_raw());
   }
 
-  public double getVelocity_raw(){
+  public double getvelocity_nativeUnits(){
     return m_talonSRX.getSelectedSensorVelocity();
   }
   public double getVelocity(){
-    return nativeVelocity2metersPerSecond(getVelocity_raw());
+    return nativeVelocity2metersPerSecond(getvelocity_nativeUnits());
   }
 
+  /**
+   * run motor at given voltage
+   * @param voltage
+   */
   public void setMotorVoltage(double voltage){
+    if (m_invertMotorVoltage){
+      voltage = -voltage;
+    }
     m_talonSRX.set(TalonSRXControlMode.PercentOutput, voltage/m_voltageCompensationSaturation);
   }
 
   public double getMotorVoltage(){
-    return m_talonSRX.getMotorOutputVoltage();
+    double voltage = m_talonSRX.getMotorOutputVoltage();
+    if (m_invertMotorVoltage){
+      voltage = -voltage;
+    }
+    return voltage;
   }
 
   public Command setVoltageCommand(double voltage){
     return new InstantCommand(()->setMotorVoltage(voltage));
   }
 
+  public void setSpeed(double speed){
+    m_desiredSpeed_meters_per_second = speed;
+    m_desiredSpeed_nativeUnits = metersPerSecondToNativeVelocity(m_desiredSpeed_meters_per_second);
+  }
+
   @Override
   public void periodic() {
-    // This method will be called once per scheduler run
+    // This method will be called once per scheduler run.
+    // Get near desired speed.
+    m_ffVolts = m_feedForward.calculate(m_desiredSpeed_nativeUnits);
+    // use PID feedback loop to keep speed near desired speed.
+    m_pidVolts = m_pidController.calculate(getvelocity_nativeUnits(), m_desiredSpeed_nativeUnits);
+    double volts = m_ffVolts + m_pidVolts;
+    volts = MathUtil.clamp(volts, -12.0, 12.0);
+    volts = m_slewRateLimiter.calculate(volts);
+    setMotorVoltage(volts);
   }
 }

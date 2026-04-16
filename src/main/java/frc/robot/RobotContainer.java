@@ -24,14 +24,19 @@ public class RobotContainer {
   }
 
   private void configureBindings() {
-    for(int degrees = 45; degrees < 360; degrees += 45){
-      m_xboxController.pov(degrees)
-        .onTrue(m_driveTrain.goStraightCommand_voltage_radians(degrees/45.0, 0.0))
-        .onFalse(m_driveTrain.goStraightCommand_voltage_radians(0.0, 0.0));
-    }
+    // for(int degrees = 45; degrees < 360; degrees += 45){
+    //   m_xboxController.pov(degrees)
+    //     .onTrue(m_driveTrain.goStraightCommand_voltage_radians(degrees/45.0, 0.0))
+    //     .onFalse(m_driveTrain.goStraightCommand_voltage_radians(0.0, 0.0));
+    // }
+    m_driveTrain.setDefaultCommand(m_driveTrain.teleop(
+      () -> -m_xboxController.getLeftY(),
+      () -> -m_xboxController.getLeftX(),
+      () -> -m_xboxController.getRightX()
+    ));
   }
 
-    public Command getAutonomousCommand() {
+  public Command getAutonomousCommand() {
     return Commands.print("No autonomous command configured");
   }
 }
