@@ -4,6 +4,8 @@
 
 package frc.robot;
 
+import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
@@ -16,9 +18,10 @@ public class RobotContainer {
   private static final double inchesPerMeter = 39.37;
   private final double m_wheelDiameter = 8.0/inchesPerMeter ;  // in meters
   private final double m_robotRadius = 17.0/inchesPerMeter;    // in meters
+  private final Pose2d m_initialPose = new Pose2d(5.0, 5.0, new Rotation2d(0.0));
   public RobotContainer() {
     m_xboxController = new CommandXboxController(0);
-    m_driveTrain = new TriomniDrive(m_wheelDiameter, m_robotRadius);
+    m_driveTrain = new TriomniDrive(m_wheelDiameter, m_robotRadius, m_initialPose);
     SmartDashboard.putData("Drive Train", m_driveTrain);
     configureBindings();
   }
@@ -32,7 +35,8 @@ public class RobotContainer {
     m_driveTrain.setDefaultCommand(m_driveTrain.teleop(
       () -> -m_xboxController.getLeftY(),
       () -> -m_xboxController.getLeftX(),
-      () -> -m_xboxController.getRightX()
+      () -> -m_xboxController.getRightX(),
+      () -> !m_xboxController.leftBumper().getAsBoolean() // field oriented by default, turn off by pressing left bumper
     ));
   }
 

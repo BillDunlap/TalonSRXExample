@@ -37,7 +37,10 @@ public class TalonSRXWrapper extends SubsystemBase {
   private double m_desiredSpeed_meters_per_second ;
   private double m_desiredSpeed_nativeUnits;
   private final double m_clicks_per_revolution = 1440; 
-  private PIDController m_pidController = new PIDController(0.010, 0.0, 0.0);
+  private double m_kP = 0.010;
+  private double m_kI = 0.0;
+  private double m_kD = 0.0;
+  private PIDController m_pidController = new PIDController(m_kP, m_kI, m_kD);
   private SimpleMotorFeedforward m_feedForward;
   private double m_ffVolts;
   private double m_pidVolts;
@@ -76,6 +79,7 @@ public class TalonSRXWrapper extends SubsystemBase {
     builder.addDoubleProperty("Bus Voltage", m_talonSRX::getBusVoltage, null);
     builder.addDoubleProperty("ffVolts", ()->m_ffVolts, null);
     builder.addDoubleProperty("pidVolts", ()->m_pidVolts, null);
+    builder.addDoubleProperty("kP", this::getKP, this::setKP);
   }
 
   private double nativePosition2Meters(double nat){
@@ -146,6 +150,14 @@ public class TalonSRXWrapper extends SubsystemBase {
   public void setSpeed(double speed){
     m_desiredSpeed_meters_per_second = speed;
     m_desiredSpeed_nativeUnits = metersPerSecondToNativeVelocity(m_desiredSpeed_meters_per_second);
+  }
+
+  public void setKP(double kP){
+    m_kP = kP;
+  }
+
+  public double getKP(){
+    return m_kP;
   }
 
   @Override

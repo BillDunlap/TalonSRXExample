@@ -47,6 +47,7 @@ public class GyroWrapper extends SubsystemBase {
   public void initSendable(SendableBuilder builder){
     builder.addDoubleProperty("Yaw", this::getYaw, null);
     builder.addStringProperty("Gyro", () -> m_whichGyro.toString(), null);
+    builder.addDoubleProperty("Rotations ccw", () -> getRotation2d().getRotations(), null);
   }
   public GyroWrapper(int pigeonCanID, WhichGyro whichGyro, double startingYaw_degrees) {
     

@@ -4,6 +4,7 @@
 
 package frc.robot.subsystems;
 
+import java.util.function.BooleanSupplier;
 import java.util.function.DoubleSupplier;
 
 import org.littletonrobotics.junction.Logger;
@@ -17,7 +18,7 @@ import edu.wpi.first.wpilibj2.command.InstantCommand;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.GyroWrapper;
 import frc.robot.kinematics.TriomniDriveKinematics;
-// import frc.robot.kinematics.TriomniDriveOdometry;
+import frc.robot.kinematics.TriomniDriveOdometry;
 import frc.robot.kinematics.TriomniDrivePoseEstimator;
 import frc.robot.kinematics.TriomniDriveWheelPositions;
 import frc.robot.kinematics.TriomniDriveWheelSpeeds;
@@ -33,13 +34,15 @@ public class TriomniDrive extends SubsystemBase {
   private final TriomniDriveWheelPositions m_wheelPositions;
   private final TriomniDriveKinematics m_driveKinematics;
   private final GyroWrapper m_gyro;
-  // private TriomniDriveOdometry m_odometry;
-  // private Pose2d m_pose2d_from_odometry;
+  private TriomniDriveOdometry m_odometry;
+  private Pose2d m_pose2d_from_odometry;
   private TriomniDrivePoseEstimator m_poseEstimator;
   private Pose2d m_pose2d_from_poseEstimator;
   private ChassisSpeeds m_desiredChassisSpeeds;
   private TriomniDriveWheelSpeeds m_desiredWheelSpeeds;
+  // PERFORMANCE CONSTANTS
   private double m_maxWheelSpeed = 2.5; // m/s.  This should take about 10 volts on basement carpet
+  private double m_maxRot = Math.PI/2;  // radians/s.  maximum rotation rate.
 
   private double m_speed_voltage = 0.0;
   // on my robot, running motor with positive voltage makes robot
@@ -48,7 +51,7 @@ public class TriomniDrive extends SubsystemBase {
   private final boolean m_invertMotorVoltage = true;
   
   /** Creates a new TriomniDrive. */
-  public TriomniDrive(double wheelDiameter, double robotRadius) {
+  public TriomniDrive(double wheelDiameter, double robotRadius, Pose2d initialPoseMeters) {
     m_wheelDiameter = wheelDiameter;
     m_robotRadius = robotRadius;
     m_frontMotor = new TalonSRXWrapper(1, m_wheelDiameter, m_invertMotorVoltage);
@@ -63,11 +66,11 @@ public class TriomniDrive extends SubsystemBase {
     m_driveKinematics = new TriomniDriveKinematics(m_robotRadius);
     m_wheelPositions = new TriomniDriveWheelPositions(0.0, 0.0, 0.0);
     SmartDashboard.putData("Wheel Pos", m_wheelPositions);
-    // m_odometry = new TriomniDriveOdometry(m_driveKinematics, m_gyro.getRotation2d(), m_wheelPositions);
-    m_poseEstimator = new TriomniDrivePoseEstimator(m_driveKinematics, m_gyro.getRotation2d(), m_wheelPositions, Pose2d.kZero);  // m_driveKinematics, m_gyro.getRotation2d(), m_wheelPositions);
+    m_odometry = new TriomniDriveOdometry(m_driveKinematics, m_gyro.getRotation2d(), m_wheelPositions, initialPoseMeters);
+    m_poseEstimator = new TriomniDrivePoseEstimator(m_driveKinematics, m_gyro.getRotation2d(), m_wheelPositions, initialPoseMeters);  // m_driveKinematics, m_gyro.getRotation2d(), m_wheelPositions);
   }
 
-  /** Tell the robot to move in the given direction at the given speed.
+  /** Tell the robot to move in the given direction at the given speed (relative to robot)
    * If the given chassis speed cannot be done in the given direction,
    * lower that speeds so that the direction can be maintained.
    * 
@@ -80,6 +83,22 @@ public class TriomniDrive extends SubsystemBase {
     m_frontMotor.setSpeed(m_desiredWheelSpeeds.m_frontSpeed);
     m_leftMotor.setSpeed(m_desiredWheelSpeeds.m_leftSpeed);
     m_rightMotor.setSpeed(m_desiredWheelSpeeds.m_rightSpeed);
+  }
+
+   /**
+   * Method to drive the robot using joystick info.
+   *
+   * @param xSpeed Speed of the robot in the x direction (forward).
+   * @param ySpeed Speed of the robot in the y direction (sideways).
+   * @param rot Angular rate of the robot.
+   * @param fieldRelative Whether the provided x and y speeds are relative to the field.
+   */
+  public void drive(double xSpeed, double ySpeed, double rot, boolean fieldRelative) {
+    ChassisSpeeds chassisSpeeds =
+      fieldRelative
+        ? ChassisSpeeds.fromFieldRelativeSpeeds(xSpeed, ySpeed, rot, m_gyro.getRotation2d())
+        : new ChassisSpeeds(xSpeed, ySpeed, rot);
+    applySpeeds(chassisSpeeds);
   }
 
   /** Move in a straight line in a robot-relative direction, specified by raw voltage
@@ -102,15 +121,13 @@ public class TriomniDrive extends SubsystemBase {
     return new InstantCommand(() -> goStraight_voltage_radians(speed_voltage, direction_radians));
   }
 
-  public Command teleop(DoubleSupplier getXSpeed, DoubleSupplier getYSpeed, DoubleSupplier getYawSpeed){
+  public Command teleop(DoubleSupplier getXSpeed, DoubleSupplier getYSpeed, DoubleSupplier getYawSpeed, BooleanSupplier getFieldOriented){
       return new InstantCommand(() -> {
-        // the suppliers are expected to give values in [-1,1]: convert to meters/second
-        double vX = MathUtil.applyDeadband(getXSpeed.getAsDouble(), 0.05, 1.0);
-        double vY = MathUtil.applyDeadband(getYSpeed.getAsDouble(), 0.05, 1.0);
-        double vYaw = MathUtil.applyDeadband(getYawSpeed.getAsDouble(), 0.05, 1.0);
-        ChassisSpeeds cs = new ChassisSpeeds(vX*2.5, vY*2.5, vYaw*Math.PI/2.0);
-        Logger.recordOutput("teleop chassisSpeeds", cs);
-        applySpeeds(cs);
+        // the DoubleSuppliers are expected to give values in [-1,1]: convert to meters/second
+        double vX = m_maxWheelSpeed * MathUtil.applyDeadband(getXSpeed.getAsDouble(), 0.05, 1.0);
+        double vY = m_maxWheelSpeed * MathUtil.applyDeadband(getYSpeed.getAsDouble(), 0.05, 1.0);
+        double vYaw = m_maxRot * MathUtil.applyDeadband(getYawSpeed.getAsDouble(), 0.05, 1.0);
+        drive(vX, vY, vYaw, getFieldOriented.getAsBoolean());
       }, this);
   }
 
@@ -120,11 +137,13 @@ public class TriomniDrive extends SubsystemBase {
     SmartDashboard.putNumber("Requested Voltage", m_speed_voltage);
     
     m_wheelPositions.update(m_frontMotor.getPosition(), m_leftMotor.getPosition(), m_rightMotor.getPosition());
-    // m_pose2d_from_odometry = m_odometry.update(m_gyro.getRotation2d(), m_wheelPositions);
-    // Logger.recordOutput("Pose(from Odometry)", m_pose2d_from_odometry);
+    m_pose2d_from_odometry = m_odometry.update(m_gyro.getRotation2d(), m_wheelPositions);
+    Logger.recordOutput("Pose(from Odometry)", m_pose2d_from_odometry);
     
     m_pose2d_from_poseEstimator = m_poseEstimator.update(m_gyro.getRotation2d(), m_wheelPositions);
     Logger.recordOutput("Pose(from PoseEstimator)", m_pose2d_from_poseEstimator);
+
+    Logger.recordOutput("Desired Chassis Speeds", m_desiredChassisSpeeds);
 
   }
 }
