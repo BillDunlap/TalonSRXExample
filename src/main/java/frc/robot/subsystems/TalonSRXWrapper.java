@@ -12,7 +12,7 @@ import com.ctre.phoenix.motorcontrol.can.TalonSRXConfiguration;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.controller.SimpleMotorFeedforward;
-import edu.wpi.first.math.filter.SlewRateLimiter;
+//import edu.wpi.first.math.filter.SlewRateLimiter;
 import edu.wpi.first.util.sendable.SendableBuilder;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.InstantCommand;
@@ -37,14 +37,14 @@ public class TalonSRXWrapper extends SubsystemBase {
   private double m_desiredSpeed_meters_per_second ;
   private double m_desiredSpeed_nativeUnits;
   private final double m_clicks_per_revolution = 1440; 
-  private double m_kP = 0.010;
-  private double m_kI = 0.0;
-  private double m_kD = 0.0;
-  private PIDController m_pidController = new PIDController(m_kP, m_kI, m_kD);
+  private double m_initialKP = 0.010;
+  private double m_initialKI = 0.0;
+  private double m_initialKD = 0.0;
+  private PIDController m_pidController = new PIDController(m_initialKP, m_initialKI, m_initialKD);
   private SimpleMotorFeedforward m_feedForward;
   private double m_ffVolts;
   private double m_pidVolts;
-  private SlewRateLimiter m_slewRateLimiter = new SlewRateLimiter(100.0); // don't change motor voltage by more than that many volts each second.
+  // private SlewRateLimiter m_slewRateLimiter = new SlewRateLimiter(100.0); // don't change motor voltage by more than that many volts each second.
 
   /** Creates a new TalonSRXWrapper.
    * @param canID the CAN number for this Talon SRX motor controller
@@ -73,13 +73,14 @@ public class TalonSRXWrapper extends SubsystemBase {
   public void initSendable(SendableBuilder builder){
     builder.addDoubleProperty("Position", this::getPosition, null);
     builder.addDoubleProperty("Position(raw)", this::getPosition_raw, null);
-    builder.addDoubleProperty("Velocity", this::getVelocity, null);
-    builder.addDoubleProperty("Desired Velocity", ()->m_desiredSpeed_meters_per_second, null);
+    builder.addDoubleProperty("Velocity", this::getvelocity_nativeUnits, null);
+    builder.addDoubleProperty("Desired Velocity", ()->m_desiredSpeed_nativeUnits, null);
     builder.addDoubleProperty("Motor Voltage", this::getMotorVoltage, null);
     builder.addDoubleProperty("Bus Voltage", m_talonSRX::getBusVoltage, null);
     builder.addDoubleProperty("ffVolts", ()->m_ffVolts, null);
     builder.addDoubleProperty("pidVolts", ()->m_pidVolts, null);
-    builder.addDoubleProperty("kP", this::getKP, this::setKP);
+    builder.addDoubleProperty("kP", () -> m_pidController.getP(), (kP) -> { m_pidController.setP(kP); });
+    builder.addDoubleProperty("kS", () -> m_feedForward.getKs(), (kS) -> { m_feedForward.setKs(kS); });
   }
 
   private double nativePosition2Meters(double nat){
@@ -153,11 +154,11 @@ public class TalonSRXWrapper extends SubsystemBase {
   }
 
   public void setKP(double kP){
-    m_kP = kP;
+    m_pidController.setP(kP);
   }
 
   public double getKP(){
-    return m_kP;
+    return m_pidController.getP();
   }
 
   @Override
@@ -169,7 +170,7 @@ public class TalonSRXWrapper extends SubsystemBase {
     m_pidVolts = m_pidController.calculate(getvelocity_nativeUnits(), m_desiredSpeed_nativeUnits);
     double volts = m_ffVolts + m_pidVolts;
     volts = MathUtil.clamp(volts, -12.0, 12.0);
-    volts = m_slewRateLimiter.calculate(volts);
+    // volts = m_slewRateLimiter.calculate(volts);
     setMotorVoltage(volts);
   }
 }
